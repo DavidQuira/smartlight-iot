@@ -1,4 +1,13 @@
+import { useNavigate } from "react-router-dom";
+
 function Login() {
+  
+  const navigate = useNavigate();
+
+  const handleLogin = () => {
+  navigate("/dashboard");
+};
+
   return (
     <div className="flex items-center justify-center h-screen bg-slate-900">
       
@@ -22,6 +31,7 @@ function Login() {
 
         <button
           className="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-lg font-bold"
+          onClick={handleLogin}
         >
           Ingresar
         </button>
