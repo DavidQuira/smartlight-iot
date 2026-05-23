@@ -1,12 +1,108 @@
 import Navbar from "../components/Navbar";
 import InfoCard from "../components/InfoCard";
 import LightCard from "../components/LightCard";
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 function Dashboard() {
 
-  const [light1, setLight1] = useState(false);
-  const [light2, setLight2] = useState(true);
+  const [telemetria, setTelemetria] = useState({
+    temp: 0,
+    hum: 0,
+    oscuro: 0,
+    dist: 0,
+    manA: "0",
+    manB: "0",
+    actualizado: "Nunca"
+  });
+
+  // =========================
+  // OBTENER DATOS DEL BACKEND
+  // =========================
+
+  const obtenerTelemetria = async () => {
+
+    try {
+
+      const response = await axios.get(
+        "http://localhost:8000/api/telemetria"
+      );
+
+      setTelemetria(response.data);
+
+    } catch (error) {
+
+      console.error("Error obteniendo telemetría:", error);
+
+    }
+  };
+
+  // =========================
+  // CONTROL LED A
+  // =========================
+
+  const controlarLedA = async () => {
+
+    try {
+
+      const comando =
+        telemetria.manA === "1" ? "off" : "on";
+
+      await axios.post(
+        `http://localhost:8000/api/hardware/ledA/${comando}`
+      );
+
+      obtenerTelemetria();
+
+    } catch (error) {
+
+      console.error(error);
+
+    }
+  };
+
+  // =========================
+  // CONTROL LED B
+  // =========================
+
+  const controlarLedB = async () => {
+
+    try {
+
+      const comando =
+        telemetria.manB === "1" ? "off" : "on";
+
+      await axios.post(
+        `http://localhost:8000/api/hardware/ledB/${comando}`
+      );
+
+      obtenerTelemetria();
+
+    } catch (error) {
+
+      console.error(error);
+
+    }
+  };
+
+  // =========================
+  // CARGAR DATOS AUTOMÁTICAMENTE
+  // =========================
+
+  useEffect(() => {
+
+    obtenerTelemetria();
+
+    const intervalo = setInterval(() => {
+
+      obtenerTelemetria();
+
+    }, 2000);
+
+    return () => clearInterval(intervalo);
+
+  }, []);
 
   return (
 
@@ -21,44 +117,44 @@ function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
         <LightCard
-          title="Luz Sala"
-          isOn={light1}
-          toggleLight={() => setLight1(!light1)}
+          title="Zona A"
+          isOn={telemetria.manA === "1"}
+          toggleLight={controlarLedA}
         />
 
         <LightCard
-          title="Luz Cocina"
-          isOn={light2}
-          toggleLight={() => setLight2(!light2)}
+          title="Zona B"
+          isOn={telemetria.manB === "1"}
+          toggleLight={controlarLedB}
         />
 
         <InfoCard
           title="Temperatura"
-          value="26°C"
+          value={`${telemetria.temp} °C`}
           color="text-orange-400"
         />
 
         <InfoCard
           title="Humedad"
-          value="65%"
+          value={`${telemetria.hum}%`}
           color="text-blue-400"
         />
 
         <InfoCard
-          title="Movimiento"
-          value="Detectado"
-          color="text-red-400"
+          title="Oscuridad"
+          value={telemetria.oscuro ? "Oscuro" : "Iluminado"}
+          color="text-purple-400"
         />
 
         <InfoCard
-          title="Consumo"
-          value="120W"
-          color="text-yellow-400"
+          title="Distancia"
+          value={`${telemetria.dist} cm`}
+          color="text-cyan-400"
         />
 
         <InfoCard
-          title="Modo"
-          value="Automático"
+          title="Última actualización"
+          value={telemetria.actualizado}
           color="text-green-400"
         />
 
@@ -67,5 +163,7 @@ function Dashboard() {
     </div>
   );
 }
+
+dgdgg
 
 export default Dashboard;
