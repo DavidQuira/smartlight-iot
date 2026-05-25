@@ -8,6 +8,14 @@ function Navbar() {
     navigate("/");
   };
 
+  const goToDashboard = () => {
+    navigate("/dashboard");
+  };
+
+  const goToGrafana = () => {
+    navigate("/grafana");
+  };
+
   return (
 
     <div className="
@@ -20,7 +28,7 @@ function Navbar() {
       p-5 rounded-3xl
       mb-10
 
-      flex items-center justify-between
+      flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between
 
       shadow-[0_0_30px_rgba(15,23,42,0.6)]
 
@@ -34,7 +42,7 @@ function Navbar() {
           w-14 h-14
           rounded-2xl
 
-          bg-gradient-to-br
+          bg-linear-to-br
           from-blue-500
           to-cyan-400
 
@@ -62,8 +70,62 @@ function Navbar() {
 
       </div>
 
-      {/* Estado + botón */}
-      <div className="flex items-center gap-5">
+      {/* Navegación + estado */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+
+        <div className="flex flex-wrap gap-3 justify-start sm:justify-end">
+
+          <button
+            onClick={goToDashboard}
+            className="
+
+              px-4 py-3
+              rounded-2xl
+
+              bg-white/5
+              hover:bg-white/10
+
+              border border-white/10
+
+              font-semibold
+
+              transition-all duration-300
+              hover:scale-105
+
+              cursor-pointer
+
+            "
+          >
+            Dashboard
+          </button>
+
+          <button
+            onClick={goToGrafana}
+            className="
+
+              px-4 py-3
+              rounded-2xl
+
+              bg-cyan-500/15
+              hover:bg-cyan-500/25
+
+              border border-cyan-400/30
+
+              font-semibold text-cyan-300
+
+              transition-all duration-300
+              hover:scale-105
+
+              cursor-pointer
+
+            "
+          >
+            Grafana
+          </button>
+
+        </div>
+
+        <div className="flex items-center gap-3 sm:justify-end">
 
         <div className="
 
@@ -114,6 +176,8 @@ function Navbar() {
         >
           Salir
         </button>
+
+        </div>
 
       </div>
 

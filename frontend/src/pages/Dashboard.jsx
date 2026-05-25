@@ -1,7 +1,7 @@
 import Navbar from "../components/Navbar";
 import InfoCard from "../components/InfoCard";
 import LightCard from "../components/LightCard";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 
 function Dashboard() {
@@ -18,6 +18,21 @@ function Dashboard() {
     actualizado: ""
   });
 
+  // Estados locales para el UI (evitan depender exclusivamente de los valores 0/1 del backend)
+  const [modeA, setModeA] = useState(
+    telemetria.manA === "1" ? "on" : "off"
+  );
+  const [modeB, setModeB] = useState(
+    telemetria.manB === "1" ? "on" : "off"
+  );
+
+  // Overrides basados en timestamp: cuando el usuario cambia el modo en el UI,
+  // preferimos su elección como fuente de la verdad por hasta `maxOverride` ms.
+  // Esto evita que el backend (que solo reporta 0/1) reseteé la UI rápidamente.
+  const maxOverride = 5 * 60 * 1000; // 5 minutos
+  const lastCommandA = useRef(null); // { value: 'on'|'off'|'auto', ts: number }
+  const lastCommandB = useRef(null);
+
   // Obtener telemetría cada 2 segundos
   useEffect(() => {
 
@@ -27,7 +42,33 @@ function Dashboard() {
 
         const res = await axios.get(`${API}/api/telemetria`);
 
+
         setTelemetria(res.data);
+
+        // Sincronizamos los modos desde el backend solo si no hay un comando
+        // local reciente (override). Si hubo un comando local dentro de
+        // `maxOverride`, respetamos la elección del usuario.
+        const now = Date.now();
+
+        if (
+          !lastCommandA.current ||
+          now - lastCommandA.current.ts > maxOverride
+        ) {
+          const newModeA =
+            res.data.manA === "AUTO" ? "auto" : res.data.manA === "1" ? "on" : "off";
+          setModeA(newModeA);
+          lastCommandA.current = null;
+        }
+
+        if (
+          !lastCommandB.current ||
+          now - lastCommandB.current.ts > maxOverride
+        ) {
+          const newModeB =
+            res.data.manB === "AUTO" ? "auto" : res.data.manB === "1" ? "on" : "off";
+          setModeB(newModeB);
+          lastCommandB.current = null;
+        }
 
       } catch (error) {
 
@@ -51,14 +92,16 @@ function Dashboard() {
 
       await axios.post(`${API}/api/hardware/ledA/${comando}`);
 
+      // Actualizamos el estado local inmediatamente y registramos el comando
+      // con timestamp para que la UI sea la fuente de la verdad durante
+      // `maxOverride`.
+      setModeA(comando === "on" ? "on" : comando === "off" ? "off" : "auto");
+      lastCommandA.current = { value: comando, ts: Date.now() };
+
+      // También actualizamos telemetría local para mostrar cambio inmediato
       setTelemetria((prev) => ({
         ...prev,
-        manA:
-          comando === "on"
-            ? "1"
-            : comando === "off"
-            ? "0"
-            : "AUTO"
+        manA: comando === "on" ? "1" : comando === "off" ? "0" : "AUTO",
       }));
 
     } catch (error) {
@@ -75,14 +118,15 @@ function Dashboard() {
 
       await axios.post(`${API}/api/hardware/ledB/${comando}`);
 
+      // Actualizamos el estado local inmediatamente y registramos el comando
+      // con timestamp para que la UI sea la fuente de la verdad durante
+      // `maxOverride`.
+      setModeB(comando === "on" ? "on" : comando === "off" ? "off" : "auto");
+      lastCommandB.current = { value: comando, ts: Date.now() };
+
       setTelemetria((prev) => ({
         ...prev,
-        manB:
-          comando === "on"
-            ? "1"
-            : comando === "off"
-            ? "0"
-            : "AUTO"
+        manB: comando === "on" ? "1" : comando === "off" ? "0" : "AUTO",
       }));
 
     } catch (error) {
@@ -91,6 +135,15 @@ function Dashboard() {
 
     }
   };
+
+  // Cleanup: limpiar timers de override al desmontar
+  useEffect(() => {
+    return () => {
+      // limpiar refs de último comando para evitar fugas
+      lastCommandA.current = null;
+      lastCommandB.current = null;
+    };
+  }, []);
 
   return (
 
@@ -128,13 +181,7 @@ function Dashboard() {
 
         <LightCard
           title="Luz Zona A"
-          mode={
-            telemetria.manA === "AUTO"
-              ? "auto"
-              : telemetria.manA === "1"
-              ? "on"
-              : "off"
-          }
+          mode={modeA}
           setMode={(modo) => controlarLedA(modo)}
         />
 
@@ -142,13 +189,7 @@ function Dashboard() {
 
         <LightCard
           title="Luz Zona B"
-          mode={
-            telemetria.manB === "AUTO"
-              ? "auto"
-              : telemetria.manB === "1"
-              ? "on"
-              : "off"
-          }
+          mode={modeB}
           setMode={(modo) => controlarLedB(modo)}
         />
 

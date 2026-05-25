@@ -4,8 +4,8 @@
 #include <DHT.h>
 
 // --- CONFIGURACIÓN DE RED WIFI ---
-const char* ssid = "LEVIRO";          // Reemplaza con tu red
-const char* password = "C@rlos1284";  // Reemplaza con tu clave
+const char* ssid = "LEVIRO";          
+const char* password = "C@rlos1284";  
 
 // --- CONFIGURACIÓN HIVEMQ PÚBLICO ---
 const char* mqtt_broker = "broker.hivemq.com";
@@ -32,11 +32,16 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 // --- VARIABLES DE ESTADO (Control de Modos) ---
-bool modoManualA = false;   // false = Automático (Sensores), true = Manual (Web)
+bool modoManualA = false;   
 bool estadoLED_A = false;
 
-bool modoManualB = false;    // Ambos LEDs arrancan en automático
+bool modoManualB = false;    
 bool estadoLED_B = false;
+
+// --- NUEVAS VARIABLES PARA PERSISTENCIA (Temporizador de luces) ---
+unsigned long tiempoUltimaPresencia = 0; 
+const unsigned long TIEMPO_ESPERA_APAGADO = 5000; // Tiempo de gracia en milisegundos (5 segundos)
+bool banderaLucesAutoEncendidas = false;          // Controla si el temporizador está activo
 
 void escribir_led_b(bool encendido) {
   digitalWrite(LED_ZONA_B, LED_B_ACTIVO_EN_BAJO ? (encendido ? LOW : HIGH) : (encendido ? HIGH : LOW));
@@ -64,7 +69,7 @@ void configurar_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-// --- CALLBACK: RECIBIR ÓRDENES DESDE LA WEB (HIVE MQ) ---
+// --- CALLBACK: RECIBIR ÓRDENES DESDE LA WEB ---
 void al_recibir_mensaje(char* topic, byte* payload, unsigned int length) {
   String mensaje = "";
   for (int i = 0; i < length; i++) {
@@ -74,29 +79,29 @@ void al_recibir_mensaje(char* topic, byte* payload, unsigned int length) {
   Serial.print("[MQTT Comando Recibido] -> ");
   Serial.println(mensaje);
 
-  // --- CORRECCIÓN PARA LED A (Pin 25) ---
+  // --- LED A (Pin 25) ---
   if (mensaje == "A_AUTO") {
     modoManualA = false;
-    digitalWrite(LED_ZONA_A, LOW); // Limpiamos el pin para que los sensores tomen el control desde cero
+    digitalWrite(LED_ZONA_A, LOW); 
     Serial.println("LED A regresó a modo AUTOMÁTICO.");
   } 
   else if (mensaje == "A_ON") {
     modoManualA = true;
     estadoLED_A = true;
-    digitalWrite(LED_ZONA_A, HIGH); // Forzamos la salida física de inmediato
+    digitalWrite(LED_ZONA_A, HIGH); 
     Serial.println("LED A en MANUAL: ENCENDIDO.");
   } 
   else if (mensaje == "A_OFF") {
     modoManualA = true;
     estadoLED_A = false;
-    digitalWrite(LED_ZONA_A, LOW);  // Forzamos la salida física de inmediato
+    digitalWrite(LED_ZONA_A, LOW);  
     Serial.println("LED A en MANUAL: APAGADO.");
   }
 
-  // --- CORRECCIÓN PARA LED B (Pin 26) ---
+  // --- LED B (Pin 26) ---
   else if (mensaje == "B_AUTO") {
     modoManualB = false;
-    escribir_led_b(false); // Limpiamos el pin
+    escribir_led_b(false); 
     Serial.println("LED B regresó a modo AUTOMÁTICO.");
   }
   else if (mensaje == "B_ON") {
@@ -117,13 +122,11 @@ void al_recibir_mensaje(char* topic, byte* payload, unsigned int length) {
 void reconectar_mqtt() {
   while (!client.connected()) {
     Serial.print("Intentando conexión MQTT a HiveMQ...");
-    // Crear un ID de cliente único basado en el chip de la placa
     String clientId = "ESP32Client-SmartLight-";
     clientId += String(random(0, 0xffff), HEX);
     
     if (client.connect(clientId.c_str())) {
       Serial.println("¡Conectado al Broker!");
-      // Nos suscribimos al tópico de comandos que envía Python
       client.subscribe(topic_comandos);
     } else {
       Serial.print("Fallo, rc=");
@@ -154,59 +157,69 @@ void loop() {
   if (!client.connected()) {
     reconectar_mqtt();
   }
-  client.loop(); // Mantiene viva la escucha de comandos
+  client.loop(); 
 
-  // --- LECTURA PERIÓDICA DE SENSORES Y ENVÍO DE TELEMETRÍA (Cada 2 segundos) ---
   unsigned long ahora = millis();
+
+  // --- 1. LECTURA DE SENSORES CRÍTICOS (Constantemente para no perder presencia) ---
+  // Lanzar pulso de ultrasonido
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  long duracion = pulseIn(ECHO_PIN, HIGH);
+  float distancia = (duracion / 2.0) / 29.1;
+  
+  int estadoOscuridad = digitalRead(LDRPIN);
+  if (distancia > 400 || distancia < 2) distancia = 0.0;
+
+  bool deteccionPresencia = (distancia >= 2 && distancia <= 30);
+
+  // --- 2. MAQUINA DE ESTADOS / LOGICA DE TEMPORIZACIÓN ---
+  bool mantenerLucesPrendidas = false;
+
+  if (estadoOscuridad == HIGH && deteccionPresencia) {
+    // Si hay presencia y está oscuro, encendemos de inmediato y renovamos la marca de tiempo
+    mantenerLucesPrendidas = true;
+    tiempoUltimaPresencia = ahora; 
+    banderaLucesAutoEncendidas = true;
+  } 
+  else if (banderaLucesAutoEncendidas) {
+    // Si ya no se detecta presencia pero las luces estaban encendidas, verificamos el tiempo de gracia
+    if (ahora - tiempoUltimaPresencia < TIEMPO_ESPERA_APAGADO) {
+      mantenerLucesPrendidas = true; // Sigue dentro de los 5 segundos de gracia
+    } else {
+      banderaLucesAutoEncendidas = false; // Se acabó el tiempo
+    }
+  }
+
+  // --- 3. APLICAR ESTADOS DE HARDWARE A LOS LEDS ---
+
+  // CONTROL LED A (Pin 25)
+  if (modoManualA) {
+    digitalWrite(LED_ZONA_A, estadoLED_A ? HIGH : LOW);
+  } else {
+    digitalWrite(LED_ZONA_A, mantenerLucesPrendidas ? HIGH : LOW);
+  }
+
+  // CONTROL LED B (Pin 26)
+  if (modoManualB) {
+    escribir_led_b(estadoLED_B);
+  } else {
+    escribir_led_b(mantenerLucesPrendidas);
+  }
+
+  // --- 4. ENVÍO PERIÓDICO DE TELEMETRÍA (Cada 2 segundos) ---
   if (ahora - ultimoMensaje > 2000) {
     ultimoMensaje = ahora;
 
-    // 1. Medir distancia (Ultrasonido)
-    digitalWrite(TRIG_PIN, LOW);
-    delayMicroseconds(2);
-    digitalWrite(TRIG_PIN, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(TRIG_PIN, LOW);
-    long duracion = pulseIn(ECHO_PIN, HIGH);
-    float distancia = (duracion / 2.0) / 29.1;
-
-    // 2. Medir Temperatura, Humedad y Luz
     float humedad = dht.readHumidity();
     float temperatura = dht.readTemperature();
-    int estadoOscuridad = digitalRead(LDRPIN); 
 
     if (isnan(humedad)) humedad = 0.0;
     if (isnan(temperatura)) temperatura = 0.0;
-    if (distancia > 400 || distancia < 2) distancia = 0.0;
 
-    // --- LÓGICA DE CONTROL DINÁMICA ---
-    bool deteccionPresencia = (distancia >= 2 && distancia <= 30);
-
-    // CONTROL LED A (Pin 25)
-    if (modoManualA) {
-      digitalWrite(LED_ZONA_A, estadoLED_A ? HIGH : LOW);
-    } else {
-      // Modo Automático: Prende solo si está oscuro Y hay alguien cerca
-      if (estadoOscuridad == HIGH && deteccionPresencia) {
-        digitalWrite(LED_ZONA_A, HIGH);
-      } else {
-        digitalWrite(LED_ZONA_A, LOW);
-      }
-    }
-
-    // CONTROL LED B (Pin 26)
-if (modoManualB) {
-      escribir_led_b(estadoLED_B);
-    } else {
-      // Modo Automático: Copia exactamente la condición del LED A (Oscuridad + Presencia)
-      if (estadoOscuridad == HIGH && deteccionPresencia) {
-        escribir_led_b(true);  // Enciende respetando su lógica física baja
-      } else {
-        escribir_led_b(false); // Apaga respetando su lógica física alta
-      }
-    }
-
-    // --- ENVIAR DATOS A PYTHON EN FORMATO JSON POR MQTT ---
     String jsonPayload = "{\"temp\":" + String(temperatura, 1) + 
                          ",\"hum\":" + String(humedad, 1) + 
                          ",\"oscuro\":" + String(estadoOscuridad) + 
