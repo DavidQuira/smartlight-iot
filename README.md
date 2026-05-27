@@ -1,16 +1,87 @@
-# React + Vite
+# SmartLight IOT
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema inteligente de iluminación y monitoreo ambiental utilizando tecnologías IoT
 
-Currently, two official plugins are available:
+# Funciones
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Encender y apagar luces remotamente
+- Activar modo automático
+- Monitorear temperatura y humedad
+- Detectar oscuridad
+- Medir distancia
+- Visualizar información en tiempo real desde un dashboard web
+- Almacenar datos históricos en InfluxDB Cloud
+- Visualizar métricas mediante Grafana
 
-## React Compiler
+# Tecnologías Utilizadas
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Frontend
+- React
+- Vite
+- TailwindCSS
+- Axios
 
-## Expanding the ESLint configuration
+Backend
+- FastAPI
+- Python
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Comunicación
+- MQTT
+- HiveMQ
+
+Hardware
+- ESP32
+- Sensores
+- LEDs
+
+Base de Datos
+- InfluxDB Cloud
+
+Visualización
+- Grafana
+
+# Instalación y Ejecucion
+Luego de clonar el repositorio, abrirlo en VS code, y abrir la terminal y hacer lo siguiente:
+
+* Entrar a la carpeta backend
+
+cd backend
+
+# Instalar dependencias
+
+python -m pip install fastapi uvicorn paho-mqtt influxdb-client
+
+
+# Ejecutar servidor FastAPI
+
+python -m uvicorn main:app --reload
+
+
+# El backend debe mostrar:
+
+http://127.0.0.1:8000
+
+
+* Entrar a la carpeta frontend
+
+cd frontend
+
+# Instalar dependencias
+
+npm install
+
+# Ejecutar proyecto React
+
+npm run dev
+
+El frontend debe correr en:
+
+http://localhost:5173
+
+
+# Hecho por
+
+- David Ramirez
+- Esteban Marta
+- Erik Dussan
+- Angel Ricaurte
